@@ -48,7 +48,7 @@ static void aicbsp_platform_power_off(void);
 
 struct aic_sdio_dev *aicbsp_sdiodev = NULL;
 static struct semaphore *aicbsp_notify_semaphore;
-static struct semaphore *aicbsp_probe_semaphore = NULL;
+extern struct semaphore aicbsp_probe_semaphore;
 
 static const struct sdio_device_id aicbsp_sdmmc_ids[];
 static bool aicbsp_load_fw_in_fdrv = false;
@@ -77,10 +77,12 @@ extern int testmode;
 #define SDIO_VENDOR_ID_AIC8801              0x5449
 #define SDIO_VENDOR_ID_AIC8800DC            0xc8a1
 #define SDIO_VENDOR_ID_AIC8800D80           0xc8a1
+#define SDIO_VENDOR_ID_AIC8800D80X2         0xc8a1
 
 #define SDIO_DEVICE_ID_AIC8801				0x0145
 #define SDIO_DEVICE_ID_AIC8800DC			0xc08d
 #define SDIO_DEVICE_ID_AIC8800D80           0x0082
+#define SDIO_DEVICE_ID_AIC8800D80X2         0x2082
 
 
 static int aicbsp_dummy_probe(struct sdio_func *func, const struct sdio_device_id *id)
@@ -244,6 +246,10 @@ static int aicwf_sdio_chipmatch(struct aic_sdio_dev *sdio_dev, uint16_t vid, uin
 		sdio_dev->chipid = PRODUCT_ID_AIC8800D80;
 		AICWFDBG(LOGINFO, "%s USE AIC8800D80\r\n", __func__);
 		return 0;
+	}else if(vid == SDIO_VENDOR_ID_AIC8800D80X2 && did == SDIO_DEVICE_ID_AIC8800D80X2){
+		sdio_dev->chipid = PRODUCT_ID_AIC8800D80X2;
+		AICWFDBG(LOGINFO, "%s USE AIC8800D80X2\r\n", __func__);
+		return 0;
 	}else{
 		return -1;
 	}
@@ -268,11 +274,6 @@ static int aicbsp_sdio_probe(struct sdio_func *func,
 
 	if (func == NULL) {
 		sdio_err("%s func is null\n", __func__);
-		return err;
-	}
-
-	if (aicbsp_probe_semaphore == NULL) {
-		sdio_err("%s bsp_probe_semaphore is null\n", __func__);
 		return err;
 	}
 
@@ -332,7 +333,7 @@ static int aicbsp_sdio_probe(struct sdio_func *func,
 	dev_set_drvdata(&func->dev, bus_if);
 	sdiodev->dev = &func->dev;
 
-    if (sdiodev->chipid != PRODUCT_ID_AIC8800D80) {
+    if (sdiodev->chipid != PRODUCT_ID_AIC8800D80 && sdiodev->chipid != PRODUCT_ID_AIC8800D80X2) {
 	    err = aicwf_sdio_func_init(sdiodev);
     } else {
         err = aicwf_sdiov3_func_init(sdiodev);
@@ -349,7 +350,7 @@ static int aicbsp_sdio_probe(struct sdio_func *func,
 
 	aicbsp_platform_init(sdiodev);
 
-	up(aicbsp_probe_semaphore);
+	up(&aicbsp_probe_semaphore);
 
 	return 0;
 fail:
@@ -403,7 +404,6 @@ done:
 	if (bus_if)
 		kfree(bus_if);
 	aicbsp_sdiodev = NULL;
-	aicbsp_probe_semaphore = NULL;
 	sdio_dbg("%s done\n", __func__);
 }
 
@@ -587,17 +587,13 @@ static void aicbsp_platform_power_off(void)
 
 int aicbsp_sdio_init(void)
 {
-	struct semaphore aic_chipup_sem;
 
-	sema_init(&aic_chipup_sem, 0);
-	aicbsp_probe_semaphore = &aic_chipup_sem;
-	
 	if (sdio_register_driver(&aicbsp_sdio_driver)) {
 		return -1;
 	} else {
 		//may add mmc_rescan here
 	}
-	if (down_timeout(aicbsp_probe_semaphore, msecs_to_jiffies(2000)) != 0){
+	if (down_timeout(&aicbsp_probe_semaphore, msecs_to_jiffies(2000)) != 0){
 		printk("%s aicbsp_sdio_probe fail\r\n", __func__);
 		return -1;
 	}
@@ -761,7 +757,7 @@ int aicwf_sdio_wakeup(struct aic_sdio_dev *sdiodev)
         sdiodev->chipid == PRODUCT_ID_AIC8800DC ||
         sdiodev->chipid == PRODUCT_ID_AIC8800DW) {
         wakeup_reg_val = 1;
-    } else if (sdiodev->chipid == PRODUCT_ID_AIC8800D80) {
+    } else if (sdiodev->chipid == PRODUCT_ID_AIC8800D80 || sdiodev->chipid == PRODUCT_ID_AIC8800D80X2) {
         wakeup_reg_val = 0x11;
     }
 
@@ -981,7 +977,8 @@ static int aicwf_sdio_tx_msg(struct aic_sdio_dev *sdiodev)
 	} else
 		len = payload_len;
 
-	if(sdiodev->chipid == PRODUCT_ID_AIC8801 || sdiodev->chipid == PRODUCT_ID_AIC8800D80){
+	if(sdiodev->chipid == PRODUCT_ID_AIC8801 || sdiodev->chipid == PRODUCT_ID_AIC8800D80 || 
+		sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
 		buffer_cnt = aicwf_sdio_flow_ctrl(sdiodev);
 		while ((buffer_cnt <= 0 || (buffer_cnt > 0 && len > (buffer_cnt * BUFFER_SIZE))) && retry < 10) {
 			retry++;
@@ -991,7 +988,8 @@ static int aicwf_sdio_tx_msg(struct aic_sdio_dev *sdiodev)
 	}
 	down(&sdiodev->tx_priv->cmd_txsema);
 
-	if(sdiodev->chipid == PRODUCT_ID_AIC8801 || sdiodev->chipid == PRODUCT_ID_AIC8800D80){
+	if(sdiodev->chipid == PRODUCT_ID_AIC8801 || sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+		sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
 		if (buffer_cnt > 0 && len < (buffer_cnt * BUFFER_SIZE)) {
 			err = aicwf_sdio_send_pkt(sdiodev, payload, len);
 			if (err) {
@@ -1225,7 +1223,7 @@ int aicwf_sdio_aggr(struct aicwf_tx_priv *tx_priv, struct sk_buff *pkt)
 	if (tx_priv->sdiodev->chipid == PRODUCT_ID_AIC8801 || tx_priv->sdiodev->chipid == PRODUCT_ID_AIC8800DC ||
         tx_priv->sdiodev->chipid == PRODUCT_ID_AIC8800DW)
         sdio_header[3] = 0; //reserved
-    else if (tx_priv->sdiodev->chipid == PRODUCT_ID_AIC8800D80)
+    else if (tx_priv->sdiodev->chipid == PRODUCT_ID_AIC8800D80  || tx_priv->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2)
 	    sdio_header[3] = crc8_ponl_107(&sdio_header[0], 3); // crc8
 
 	memcpy(tx_priv->tail, (u8 *)&sdio_header, sizeof(sdio_header));
@@ -1332,7 +1330,7 @@ static int aicwf_sdio_bus_start(struct device *dev)
 
 		if (ret != 0)
 			sdio_err("func2 intr register failed:%d\n", ret);
-	}else if(sdiodev->chipid == PRODUCT_ID_AIC8800D80){
+	}else if(sdiodev->chipid == PRODUCT_ID_AIC8800D80 || sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
 		sdio_claim_host(sdiodev->func);
 		sdio_claim_irq(sdiodev->func, aicwf_sdio_hal_irqhandler);
 
@@ -1473,7 +1471,7 @@ void aicwf_sdio_hal_irqhandler(struct sdio_func *func)
 
     	    ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.block_cnt_reg, &intstatus);
     	}
-    }else if (sdiodev->chipid  == PRODUCT_ID_AIC8800D80) {
+    }else if (sdiodev->chipid  == PRODUCT_ID_AIC8800D80 || sdiodev->chipid  == PRODUCT_ID_AIC8800D80X2) {
         do {
             ret = aicwf_sdio_readb(sdiodev, sdiodev->sdio_reg.misc_int_status_reg, &intstatus);
             if (!ret) {
@@ -1690,7 +1688,7 @@ void aicwf_sdio_reg_init(struct aic_sdio_dev *sdiodev)
         sdiodev->sdio_reg.block_cnt_reg =          SDIOWIFI_BLOCK_CNT_REG;
         sdiodev->sdio_reg.rd_fifo_addr =           SDIOWIFI_RD_FIFO_ADDR;
         sdiodev->sdio_reg.wr_fifo_addr =           SDIOWIFI_WR_FIFO_ADDR;
-	} else if (sdiodev->chipid == PRODUCT_ID_AIC8800D80){
+	} else if (sdiodev->chipid == PRODUCT_ID_AIC8800D80 || sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
         sdiodev->sdio_reg.bytemode_len_reg =       SDIOWIFI_BYTEMODE_LEN_REG_V3;
         sdiodev->sdio_reg.intr_config_reg =        SDIOWIFI_INTR_ENABLE_REG_V3;
         sdiodev->sdio_reg.sleep_reg =              SDIOWIFI_INTR_PENDING_REG_V3;
