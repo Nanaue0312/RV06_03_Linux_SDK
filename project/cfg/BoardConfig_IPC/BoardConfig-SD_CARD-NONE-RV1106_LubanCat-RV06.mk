@@ -28,7 +28,7 @@ export RK_KERNEL_DEFCONFIG=rv1106_lbc_defconfig
 export RK_KERNEL_DTS=rv1106g-lubancat-rv06.dts
 
 # buildroot defconfig
-export RK_BUILDROOT_DEFCONFIG=rv1106_lbc_rv06_defconfig
+export RK_BUILDROOT_DEFCONFIG=rv1106_lbc_defconfig
 
 #misc image
 export RK_MISC=wipe_all-misc.img
