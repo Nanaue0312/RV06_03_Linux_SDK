@@ -48,7 +48,7 @@ function build {
     BOARD_NAME=$(echo $1 | awk -F'_' '{print $3}' | awk -F'.' '{print $1}')
 
     # 判断是不是10寸屏
-    if [ $(echo $1 | grep 10-inch) ]; then
+    if [ $(echo $1 | grep "10-inch") ]; then
         RELEASE_DIR=output-release/$BOARD_NAME/buildroot镜像/$NOW_DATE/${BOOT_MEDIUM}/10_inch
     else
         RELEASE_DIR=output-release/$BOARD_NAME/buildroot镜像/$NOW_DATE/${BOOT_MEDIUM}
@@ -65,4 +65,4 @@ rm -rf output-release
 # 按配置文件构建镜像
 build BoardConfig-SD_CARD-NONE-RV1106_LubanCat-RV06.mk
 build BoardConfig-SPI_NAND-NONE-RV1106_LubanCat-RV06.mk
-build BoardConfig-SPI_NAND-NONE-RV1106_LubanCat-RV06-10-inch.mk
+build BoardConfig-SPI_NAND-NONE-RV1106_LubanCat-RV06_10-inch.mk
