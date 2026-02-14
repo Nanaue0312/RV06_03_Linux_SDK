@@ -1,0 +1,25 @@
+CompileFlags:
+  Add: [
+    "-I", "/home/nanaue/workspace/RV06_03_Linux_SDK/sysdrv/source/kernel/include",
+    "-I", "/home/nanaue/workspace/RV06_03_Linux_SDK/sysdrv/source/kernel/include/uapi",
+    # 宏定义，防止 Clang 报错
+    "-D__KERNEL__",
+    "-DMODULE",
+    "-D__GNUC__",
+    # 如果是 64 位 ARM 平台
+    "-target", "aarch64-linux-gnu",
+    # 忽略部分 Clang 不识别的 GCC 特性警告
+    "-Wno-unknown-attributes",
+    "-Wno-implicit-function-declaration"
+  ]
+  # 排除系统默认的头文件路径，防止冲突
+  Remove: [-m*, -f*]
+
+Index:
+  Background: Build
+
+Diagnostics:
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add: [bugprone*, performance*]
+    Remove: [cppcoreguidelines*]
