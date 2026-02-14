@@ -111,7 +111,7 @@
 			csi_dphy_input6: endpoint@6 {
 				reg = <6>;
 				remote-endpoint = <&imx385_cam0_out>;
-				data-lanes = <2 1>;
+				data-lanes = <1 2>;
 			};
 		};
 

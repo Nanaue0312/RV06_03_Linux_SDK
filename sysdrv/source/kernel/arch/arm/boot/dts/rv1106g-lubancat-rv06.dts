@@ -517,7 +517,7 @@
 			imx385_cam0_out: endpoint {
 				remote-endpoint = <&csi_dphy_input6>;
 				data-lanes = <1 2>;
-				link-frequencies = /bits/ 64 <185625000>;
+				link-frequencies = /bits/ 64 <371250000>;
 			};
 		};
 	};
