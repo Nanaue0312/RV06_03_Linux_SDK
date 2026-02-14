@@ -82,10 +82,16 @@
 #define OF_CAMERA_PINCTRL_STATE_DEFAULT  "rockchip,camera_default"
 #define OF_CAMERA_PINCTRL_STATE_SLEEP    "rockchip,camera_sleep"
 
+enum imx385_supply_id {
+	IMX385_SUPPLY_DVDD = 0,
+	IMX385_SUPPLY_DOVDD,
+	IMX385_SUPPLY_AVDD,
+};
+
 static const char * const imx385_supply_names[] = {
-	"avdd",
-	"dovdd",
 	"dvdd",
+	"dovdd",
+	"avdd",
 };
 
 #define IMX385_NUM_SUPPLIES ARRAY_SIZE(imx385_supply_names)
@@ -160,7 +166,8 @@ static const struct regval imx385_mipi_2lane_1080p_30fps_regs[] = {
 	{0x3005, 0x00},
 	{0x3007, 0x00},
 	{0x3009, 0x02},
-	{0x300A, 0xF0},
+	{0x300A, 0x3C},
+	{0x300B, 0x00},
 	{0x3012, 0x2C},
 	{0x3013, 0x01},
 	{0x3016, 0x08},
@@ -172,7 +179,7 @@ static const struct regval imx385_mipi_2lane_1080p_30fps_regs[] = {
 	{0x3020, 0x7D},
 	{0x3021, 0x00},
 	{0x3022, 0x00},
-	{0x3044, 0x01},
+	{0x3044, 0x00},
 	{0x3046, 0x00},
 	{0x3047, 0x00},
 	{0x3054, 0x00},
@@ -253,7 +260,7 @@ static int imx385_write_reg(struct i2c_client *client, u16 reg,
 	__be32 val_be;
 
 	if (len > 4)
-		return -EINVAL;
+		return -EINVAL; 
 
 	buf[0] = reg >> 8;
 	buf[1] = reg & 0xff;
@@ -314,8 +321,12 @@ static int imx385_read_reg(struct i2c_client *client, u16 reg,
 	msgs[1].buf = &data_be_p[4 - len];
 
 	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
-	if (ret != ARRAY_SIZE(msgs))
+	if (ret != ARRAY_SIZE(msgs)) {
+		dev_err(&client->dev,
+			"i2c read failed: reg=0x%04x len=%u ret=%d\n",
+			reg, len, ret);
 		return -EIO;
+	}
 
 	*val = be32_to_cpu(data_be);
 	return 0;
@@ -683,6 +694,35 @@ static inline u32 imx385_cal_delay(u32 cycles)
 	return DIV_ROUND_UP(cycles, IMX385_XVCLK_FREQ / 1000 / 1000);
 }
 
+static int imx385_enable_supplies_in_order(struct imx385 *imx385)
+{
+	int i;
+	int ret;
+
+	for (i = 0; i < IMX385_NUM_SUPPLIES; i++) {
+		ret = regulator_enable(imx385->supplies[i].consumer);
+		if (ret)
+			goto err_disable_rollback;
+		usleep_range(100, 200);
+	}
+
+	return 0;
+
+err_disable_rollback:
+	while (--i >= 0)
+		regulator_disable(imx385->supplies[i].consumer);
+
+	return ret;
+}
+
+static void imx385_disable_supplies_in_order(struct imx385 *imx385)
+{
+	int i;
+
+	for (i = IMX385_NUM_SUPPLIES - 1; i >= 0; i--)
+		regulator_disable(imx385->supplies[i].consumer);
+}
+
 static int __imx385_power_on(struct imx385 *imx385)
 {
 	int ret;
@@ -695,6 +735,15 @@ static int __imx385_power_on(struct imx385 *imx385)
 			dev_err(dev, "could not set pins\n");
 	}
 
+	if (!IS_ERR(imx385->reset_gpio))
+		gpiod_set_value_cansleep(imx385->reset_gpio, 0);
+
+	ret = imx385_enable_supplies_in_order(imx385);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable regulators in order\n");
+		return ret;
+	}
+
 	ret = clk_set_rate(imx385->xvclk, IMX385_XVCLK_FREQ);
 	if (ret < 0)
 		dev_warn(dev, "Failed to set xvclk rate (37.125M Hz)\n");
@@ -705,23 +754,15 @@ static int __imx385_power_on(struct imx385 *imx385)
 	ret = clk_prepare_enable(imx385->xvclk);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable xvclk\n");
-		return ret;
+		goto disable_supplies;
 	}
-
-	ret = regulator_bulk_enable(IMX385_NUM_SUPPLIES, imx385->supplies);
-	if (ret < 0) {
-		dev_err(dev, "Failed to enable regulators\n");
-		goto disable_clk;
-	}
-
-	if (!IS_ERR(imx385->reset_gpio))
-		gpiod_set_value_cansleep(imx385->reset_gpio, 0);
-	usleep_range(500, 1000);
-	if (!IS_ERR(imx385->reset_gpio))
-		gpiod_set_value_cansleep(imx385->reset_gpio, 1);
 
 	if (!IS_ERR(imx385->pwdn_gpio))
 		gpiod_set_value_cansleep(imx385->pwdn_gpio, 1);
+
+	usleep_range(500, 1000);
+	if (!IS_ERR(imx385->reset_gpio))
+		gpiod_set_value_cansleep(imx385->reset_gpio, 1);
 
 	delay_us = imx385_cal_delay(8192);
 	usleep_range(delay_us, delay_us * 2);
@@ -729,8 +770,8 @@ static int __imx385_power_on(struct imx385 *imx385)
 
 	return 0;
 
-disable_clk:
-	clk_disable_unprepare(imx385->xvclk);
+disable_supplies:
+	imx385_disable_supplies_in_order(imx385);
 	return ret;
 }
 
@@ -751,7 +792,7 @@ static void __imx385_power_off(struct imx385 *imx385)
 			dev_dbg(dev, "could not set pins\n");
 	}
 
-	regulator_bulk_disable(IMX385_NUM_SUPPLIES, imx385->supplies);
+	imx385_disable_supplies_in_order(imx385);
 }
 
 static int imx385_runtime_resume(struct device *dev)
@@ -1012,8 +1053,13 @@ static int imx385_check_sensor_id(struct imx385 *imx385,
 
 	ret = imx385_read_reg(client, IMX385_REG_CHIP_ID,
 			      IMX385_REG_VALUE_08BIT, &id);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "read chip id failed: %d\n", ret);
 		return ret;
+	}
+
+	dev_info(dev, "chip id reg(0x%04x)=0x%02x, expect 0x%02x\n",
+		 IMX385_REG_CHIP_ID, id, CHIP_ID);
 
 	if (id != CHIP_ID) {
 		dev_err(dev, "Unexpected sensor id(%06x)\n", id);
@@ -1051,6 +1097,8 @@ static int imx385_probe(struct i2c_client *client,
 		 DRIVER_VERSION >> 16,
 		 (DRIVER_VERSION & 0xff00) >> 8,
 		 DRIVER_VERSION & 0x00ff);
+	dev_info(dev, "probe start: i2c-%d addr=0x%02x\n",
+		 client->adapter ? client->adapter->nr : -1, client->addr);
 
 	imx385 = devm_kzalloc(dev, sizeof(*imx385), GFP_KERNEL);
 	if (!imx385)
@@ -1089,6 +1137,8 @@ static int imx385_probe(struct i2c_client *client,
 	}
 
 	lane_num = imx385->bus_cfg.bus.mipi_csi2.num_data_lanes;
+	dev_info(dev, "endpoint parsed: bus_type=%u lanes=%u\n",
+		 imx385->bus_cfg.bus_type, lane_num);
 	if (lane_num != IMX385_2LANES) {
 		dev_err(dev, "only 2 data lanes are supported, got %u\n", lane_num);
 		return -EINVAL;
@@ -1138,16 +1188,28 @@ static int imx385_probe(struct i2c_client *client,
 	v4l2_i2c_subdev_init(sd, client, &imx385_subdev_ops);
 
 	ret = imx385_initialize_controls(imx385);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "init controls failed: %d\n", ret);
 		goto err_destroy_mutex;
+	}
+
+	dev_info(dev, "controls initialized\n");
 
 	ret = __imx385_power_on(imx385);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "power on failed: %d\n", ret);
 		goto err_free_handler;
+	}
+
+	dev_info(dev, "sensor power on done\n");
 
 	ret = imx385_check_sensor_id(imx385, client);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "sensor id check failed: %d\n", ret);
 		goto err_power_off;
+	}
+
+	dev_info(dev, "sensor id check passed\n");
 
 #ifdef CONFIG_VIDEO_V4L2_SUBDEV_API
 	sd->internal_ops = &imx385_internal_ops;
@@ -1178,6 +1240,8 @@ static int imx385_probe(struct i2c_client *client,
 		dev_err(dev, "v4l2 async register subdev failed\n");
 		goto err_clean_entity;
 	}
+
+	dev_info(dev, "probe success\n");
 
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
