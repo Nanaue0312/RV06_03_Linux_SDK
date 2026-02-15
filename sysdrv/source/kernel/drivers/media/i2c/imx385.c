@@ -409,7 +409,7 @@ static int imx385_set_fmt(struct v4l2_subdev *sd,
 					 IMX385_VTS_MAX - mode->height, 1,
 					 vblank_def);
 		dst_link_freq = 0;
-		dst_pixel_rate = IMX385_LINK_FREQ_371M;
+		dst_pixel_rate = IMX385_PIXEL_RATE;
 		__v4l2_ctrl_s_ctrl_int64(imx385->pixel_rate, dst_pixel_rate);
 		__v4l2_ctrl_s_ctrl(imx385->link_freq, dst_link_freq);
 		imx385->cur_vts = mode->vts_def;
@@ -940,10 +940,10 @@ static int __imx385_power_on(struct imx385 *imx385)
 	}
 
 	if (!IS_ERR(imx385->reset_gpio))
-		gpiod_set_value_cansleep(imx385->reset_gpio, 0);
+		gpiod_set_value_cansleep(imx385->reset_gpio, 1);
 	usleep_range(500, 1000);
 	if (!IS_ERR(imx385->reset_gpio))
-		gpiod_set_value_cansleep(imx385->reset_gpio, 1);
+		gpiod_set_value_cansleep(imx385->reset_gpio, 0);
 
 	usleep_range(1000, 2000);
 
@@ -968,10 +968,10 @@ static void __imx385_power_off(struct imx385 *imx385)
 	struct device *dev = &imx385->client->dev;
 
 	if (!IS_ERR(imx385->pwdn_gpio))
-		gpiod_set_value_cansleep(imx385->pwdn_gpio, 0);
+		gpiod_set_value_cansleep(imx385->pwdn_gpio, 1);
 	clk_disable_unprepare(imx385->xvclk);
 	if (!IS_ERR(imx385->reset_gpio))
-		gpiod_set_value_cansleep(imx385->reset_gpio, 0);
+		gpiod_set_value_cansleep(imx385->reset_gpio, 1);
 	if (!IS_ERR_OR_NULL(imx385->pins_sleep)) {
 		ret = pinctrl_select_state(imx385->pinctrl, imx385->pins_sleep);
 		if (ret < 0)

@@ -11,8 +11,8 @@
 #include "rv1106g-lubancat-screen-rgb.dtsi"
 
 //camara
-#include "rv1106g-lubancat-single-cam.dtsi"
-// #include "rv1106g-lubancat-dual-cam.dtsi"
+// #include "rv1106g-lubancat-single-cam.dtsi"
+#include "rv1106g-lubancat-dual-cam.dtsi"
 
 / {
     model = "LubanCat RV1106 IO Board";
@@ -511,7 +511,7 @@
 		clocks = <&ext_cam_37m_clk>;
 		clock-names = "xvclk";
 		pwdn-gpios = <&gpio5 0 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&gpio5 1 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
 
 		dovdd-supply= <&vcc_1v8>; /* 1.8v */
 		avdd-supply = <&vcc_3v3>;  /* 3.3v */
@@ -521,10 +521,9 @@
 		rockchip,camera-module-facing = "back";
 		rockchip,camera-module-name = "imx385";
 		rockchip,camera-module-lens-name = "default";
-		rockchip,imx385-capture-mode=<1>; /* 1920x1080 */
 		port {
 			imx385_cam0_out: endpoint {
-				remote-endpoint = <&csi_dphy_input6>;
+				remote-endpoint = <&csi_dphy1_input5>;
 				data-lanes = <1 2>;
 				link-frequencies = /bits/ 64 <371250000>;
 			};
@@ -532,35 +531,30 @@
 	};
 };
 
-/*
- * This board uses IMX385 on i2c4@0x1a.
- * Disable other camera nodes from rv1106g-lubancat-single-cam.dtsi
- * to avoid shared reset/pwdn GPIO contention during probe.
- */
-&dw9714 {
-	status = "disabled";
-};
+&i2c3 {
+	imx385_cam1: imx385-cam1@1a {
+		compatible = "sony,imx385";
+		status = "okay";
+		reg = <0x1a>;
+		clocks = <&ext_cam_37m_clk>;
+		clock-names = "xvclk";
+		pwdn-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio5 3 GPIO_ACTIVE_LOW>;
 
-&ov8858 {
-	status = "disabled";
-};
+		dovdd-supply= <&vcc_1v8>; /* 1.8v */
+		avdd-supply = <&vcc_3v3>;  /* 3.3v */
+		dvdd-supply = <&vcc_1v2>;  /* 1.2v */
 
-&sc530ai {
-	status = "disabled";
-};
-
-&imx415 {
-	status = "disabled";
-};
-
-&gc4653 {
-	status = "disabled";
-};
-
-&gc2053 {
-	status = "disabled";
-};
-
-&gc2093 {
-	status = "disabled";
+		rockchip,camera-module-index = <0>;
+		rockchip,camera-module-facing = "back";
+		rockchip,camera-module-name = "imx385";
+		rockchip,camera-module-lens-name = "default";
+		port {
+			imx385_cam1_out: endpoint {
+				remote-endpoint = <&csi_dphy2_input5>;
+				data-lanes = <1 2>;
+				link-frequencies = /bits/ 64 <371250000>;
+			};
+		};
+	};
 };

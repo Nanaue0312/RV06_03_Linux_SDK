@@ -102,6 +102,12 @@
 				remote-endpoint = <&gc2093_cam0_out>;
 				data-lanes = <1 2>;
 			};
+
+			csi_dphy1_input5: endpoint@5 {
+				reg = <5>;
+				remote-endpoint = <&imx385_cam0_out>;
+				data-lanes = <1 2>;
+			};
 		};
 
 		port@1 {
@@ -159,6 +165,11 @@
 				data-lanes = <1 2>;
 			};
 
+			csi_dphy2_input5: endpoint@5 {
+				reg = <5>;
+				remote-endpoint = <&imx385_cam1_out>;
+				data-lanes = <1 2>;
+			};
 		};
 
 		port@1 {
