@@ -1258,7 +1258,8 @@ static int imx385_initialize_controls(struct imx385 *imx385)
 	handler->lock = &imx385->mutex;
 
 	imx385->link_freq = v4l2_ctrl_new_int_menu(
-		handler, NULL, V4L2_CID_LINK_FREQ, 1, 0, link_freq_menu_items);
+		handler, NULL, V4L2_CID_LINK_FREQ,
+		ARRAY_SIZE(link_freq_menu_items) - 1, 0, link_freq_menu_items);
 
 	dst_link_freq = 0;
 	dst_pixel_rate = IMX385_PIXEL_RATE;
@@ -1395,6 +1396,10 @@ static int imx385_probe(struct i2c_client *client,
 
 	ret = v4l2_fwnode_endpoint_parse(of_fwnode_handle(endpoint),
 		&imx385->bus_cfg);
+	if (ret) {
+		dev_err(dev, "Failed to parse endpoint\n");
+		return ret;
+	}
 	if (imx385->bus_cfg.bus_type == V4L2_MBUS_CCP2)
 		dev_warn(dev, "CCP2 is not supported, fallback to MIPI mode\n");
 	imx385->support_modes = mipi_supported_modes;
@@ -1542,6 +1547,7 @@ static const struct i2c_device_id imx385_match_id[] = { { "sony,imx385", 0 },
 static struct i2c_driver imx385_i2c_driver = {
 	.driver = {
 		.name = IMX385_NAME,
+		.pm = &imx385_pm_ops,
 		.of_match_table = of_match_ptr(imx385_of_match),
 	},
 	.probe = &imx385_probe,
