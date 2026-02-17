@@ -145,7 +145,6 @@ struct imx385 {
 	struct v4l2_ctrl_handler ctrl_handler;
 	struct v4l2_ctrl *exposure;
 	struct v4l2_ctrl *anal_gain;
-	struct v4l2_ctrl *digi_gain;
 	struct v4l2_ctrl *hblank;
 	struct v4l2_ctrl *vblank;
 	struct v4l2_ctrl *pixel_rate;
