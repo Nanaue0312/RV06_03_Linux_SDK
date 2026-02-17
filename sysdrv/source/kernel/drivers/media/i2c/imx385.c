@@ -91,8 +91,8 @@
 
 #define USED_TEST_PATTERN
 #ifdef USED_TEST_PATTERN
-#define IMX327_REG_TEST_PATTERN		0x308c
-#define	IMX327_TEST_PATTERN_ENABLE	BIT(0)
+#define IMX385_REG_TEST_PATTERN		0x308c
+#define	IMX385_TEST_PATTERN_ENABLE	BIT(0)
 #endif
 
 
@@ -227,26 +227,26 @@ static const struct regval imx385_mipi_2lane_1080p_30fps_regs[] = {
 	{ 0x333E, 0x10 },
 	{ 0x333F, 0x00 },
 
-	{ 0x3344, 0x02 },
+	{ 0x3344, 0x01 },
 	{ 0x3346, 0x01 },
 	{ 0x3353, 0x0E },
 	{ 0x3357, 0x49 },
 	{ 0x3358, 0x04 },
-	{ 0x336B, 0x27 },
+	{ 0x336B, 0x37 },
 	{ 0x336C, 0x1F },
 	{ 0x337D, 0x0A },
 	{ 0x337E, 0x0A },
 	{ 0x337F, 0x01 },
 	{ 0x3380, 0x20 },
 	{ 0x3381, 0x25 },
-	{ 0x3382, 0x57 },
-	{ 0x3383, 0x0F },
-	{ 0x3384, 0x2F },
-	{ 0x3385, 0x17 },
-	{ 0x3386, 0x0F },
-	{ 0x3387, 0x0F },
-	{ 0x3388, 0x37 },
-	{ 0x3389, 0x1F },
+	{ 0x3382, 0x5F },
+	{ 0x3383, 0x1F },
+	{ 0x3384, 0x37 },
+	{ 0x3385, 0x1F },
+	{ 0x3386, 0x1F },
+	{ 0x3387, 0x17 },
+	{ 0x3388, 0x67 },
+	{ 0x3389, 0x27 },
 	{ 0x338D, 0xB4 },
 	{ 0x338E, 0x01 },
 	{ 0x3000, 0x00 },
@@ -489,6 +489,32 @@ static int imx385_g_frame_interval(struct v4l2_subdev *sd,
 
 	return 0;
 }
+
+#ifdef USED_TEST_PATTERN
+static int imx385_enable_test_pattern(struct imx385 *imx385, u32 pattern)
+{
+	u32 val = 0;
+
+	imx385_read_reg(imx385->client, IMX385_REG_TEST_PATTERN,
+			IMX385_REG_VALUE_08BIT, &val);
+	if (pattern) {
+		val = ((pattern - 1) << 4) | IMX385_TEST_PATTERN_ENABLE;
+		imx385_write_reg(imx385->client, 0x300A,
+				 IMX385_REG_VALUE_08BIT, 0x00);
+		imx385_write_reg(imx385->client, 0x300E,
+				 IMX385_REG_VALUE_08BIT, 0x00);
+	} else {
+		val &= ~IMX385_TEST_PATTERN_ENABLE;
+		imx385_write_reg(imx385->client, 0x300A,
+				 IMX385_REG_VALUE_08BIT, 0x3c);
+		imx385_write_reg(imx385->client, 0x300E,
+				 IMX385_REG_VALUE_08BIT, 0x01);
+	}
+
+	return imx385_write_reg(imx385->client, IMX385_REG_TEST_PATTERN,
+				IMX385_REG_VALUE_08BIT, val);
+}
+#endif
 
 static int imx385_g_mbus_config(struct v4l2_subdev *sd, unsigned int pad_id,
 				struct v4l2_mbus_config *config)
@@ -1198,7 +1224,7 @@ static int imx385_set_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	case V4L2_CID_TEST_PATTERN:
 #ifdef USED_TEST_PATTERN
-		ret = 0;
+		ret = imx385_enable_test_pattern(imx385, ctrl->val);
 #endif
 		break;
 	case V4L2_CID_HFLIP:
