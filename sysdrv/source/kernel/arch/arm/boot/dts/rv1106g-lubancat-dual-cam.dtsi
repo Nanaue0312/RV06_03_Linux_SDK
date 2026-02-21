@@ -607,7 +607,7 @@
 	port {
 		/* MIPI CSI-2 endpoint */
 		mipi_lvds1_sditf: endpoint {
-			remote-endpoint = <&isp_in1>;
+			remote-endpoint = <&isp_in0>;
 		};
 	};
 };
@@ -621,13 +621,13 @@
 
 	port@0 {
 		isp_in0: endpoint {
-			remote-endpoint = <&mipi_lvds0_sditf>;
+			remote-endpoint = <&mipi_lvds1_sditf>;
 		};
 	};
 };
 
 &rkisp_vir1 {
-	status = "okay";
+	status = "disabled";
 
 	port@0 {
 		isp_in1: endpoint {

@@ -506,7 +506,7 @@
 &i2c4 {
 	imx385_cam0: imx385-cam0@1a {
 		compatible = "sony,imx385";
-		status = "okay";
+		status = "disable";
 		reg = <0x1a>;
 		clocks = <&ext_cam_37m_clk>;
 		clock-names = "xvclk";
@@ -547,8 +547,10 @@
 
 		rockchip,camera-module-index = <0>;
 		rockchip,camera-module-facing = "back";
-		rockchip,camera-module-name = "imx385";
+		rockchip,camera-module-name = "null";
 		rockchip,camera-module-lens-name = "default";
+		rockchip,camera-module-defrect = <1920 1080 1920 1080>;
+        rockchip,camera-module-ext-name = "imx385";
 		port {
 			imx385_cam1_out: endpoint {
 				remote-endpoint = <&csi_dphy2_input5>;
